@@ -4,8 +4,10 @@
 #include "uLCD_4DGL.h"
 #include "PinDetect.h"
 #include "motordriver.h"
-#include "RPG.h"
+
 #include <stdio.h>
+
+Serial pc(USBTX, USBRX);
 
 /// function definitions ///
 void dist(int distance);
@@ -19,10 +21,13 @@ Motor right(p26, p25, p24, 1);
  // uLCD
 uLCD_4DGL uLCD(p9,p10,p11); // serial tx, serial rx, reset pin;
 // rpg
-// InterruptIn RPG_A(p14);//encoder A and B pins/bits use interrupts
-// InterruptIn RPG_B(p15);
-// PinDetect RPG_PB(p16); //encode pushbutton switch "SW" on PCB
-RPG rpg(p14, p15, p16);
+InterruptIn RPG_A(p14);//encoder A and B pins/bits use interrupts
+InterruptIn RPG_B(p15);
+PinDetect RPG_PB(p16); //encode pushbutton switch "SW" on PCB
+// pushbuttons
+PinDetect up(p12);
+PinDetect down(p13);
+//RPG rpg(p14, p15, p16);
 // speaker with amp
 AnalogOut speaker(p18);
 Ticker Sample_Period;
@@ -40,18 +45,18 @@ volatile int old_enc = 0;
 volatile int new_enc = 0;
 volatile int enc_count = 0;
 const int lookup_table[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
-int count = 0;
-int dirt = 0;
+// volatile int count = 0;
+// volatile int dirt = 0;
 // time variables
 volatile int curr_hour = 12;
 volatile int curr_min = 0;
 volatile int alarm_hour = 0;
 volatile int alarm_min = 0;
-bool set_curr_hour = true;
-bool set_curr_min = false;
-bool set_alarm_hour = false;
-bool set_alarm_min = false;
-bool alarm = false;
+volatile bool set_curr_hour = false;
+volatile bool set_curr_min = false;
+volatile bool set_alarm_hour = false;
+volatile bool set_alarm_min = false;
+volatile bool alarm = false;
 // uLCD variables
 Mutex uLCD_lock;
 // speaker variables
@@ -69,15 +74,73 @@ volatile int i=0;
     uLCD_lock.unlock();
 }
 
+/// pushbutton callback ///
+// increment time by one to be more precise
+void precisionUp()
+{
+    if (set_curr_hour)
+    {
+        curr_hour++;
+        if (curr_hour >= 24) curr_hour = 0;
+        if (curr_hour <= 0) curr_hour = 0;
+    }
+    else if (set_curr_min)
+    {
+        curr_min++;
+        if (curr_min >= 60) curr_min = 0;
+        if (curr_min <= 0) curr_min = 0;
+    }
+    else if (set_alarm_hour)
+    {
+        alarm_hour++;
+        if (alarm_hour >= 24) alarm_hour = 0;
+        if (alarm_hour <= 0) alarm_hour = 0;
+    }
+    else if (set_alarm_min)
+    {
+        alarm_min++;
+        if (alarm_min >= 60) alarm_min = 0;
+        if (alarm_min <= 0) alarm_min = 0;
+    }
+}
+// decrement time by one to be more precise
+void precisionDown()
+{
+    if (set_curr_hour)
+    {
+        curr_hour--;
+        if (curr_hour >= 24) curr_hour = 0;
+        if (curr_hour <= 0) curr_hour = 0;
+    }
+    else if (set_curr_min)
+    {
+        curr_min--;
+        if (curr_min >= 60) curr_min = 0;
+        if (curr_min <= 0) curr_min = 0;
+    }
+    else if (set_alarm_hour)
+    {
+        alarm_hour--;
+        if (alarm_hour >= 24) alarm_hour = 0;
+        if (alarm_hour <= 0) alarm_hour = 0;
+    }
+    else if (set_alarm_min)
+    {
+        alarm_min--;
+        if (alarm_min >= 60) alarm_min = 0;
+        if (alarm_min <= 0) alarm_min = 0;
+    }
+}
+
 /// RPG rotary callback ///
 //Encoder bit change interrupt service routine
 //called whenever one of the two A,B encoder bits change state
 void Enc_change_ISR(void)
 {
-    // new_enc = RPG_A<<1 | RPG_B;//current encoder bits
-    // //check truth table for -1,0 or +1 added to count
-    // enc_count = lookup_table[old_enc<<2 | new_enc];
-    // old_enc = new_enc;
+    new_enc = RPG_A<<1 | RPG_B;//current encoder bits
+    //check truth table for -1,0 or +1 added to count
+    enc_count = lookup_table[old_enc<<2 | new_enc];
+    old_enc = new_enc;
     // logic to change times might actually need to be here
     // check if a set time flag is set and then update 
     if (set_curr_hour)
@@ -87,66 +150,70 @@ void Enc_change_ISR(void)
         if (curr_hour >= 24) curr_hour = 0;
         if (curr_hour <= 0) curr_hour = 0;
     }
-    if (set_curr_min)
+    else if (set_curr_min)
     {
         if (enc_count == 1) curr_min++;
         if (enc_count == -1) curr_min--;
         if (curr_min >= 60) curr_min = 0;
         if (curr_min <= 0) curr_min = 0;
     }
-    if (set_alarm_hour)
+    else if (set_alarm_hour)
     {
         if (enc_count == 1) alarm_hour++;
         if (enc_count == -1) alarm_hour--;
         if (alarm_hour >= 24) alarm_hour = 0;
         if (alarm_hour <= 0) alarm_hour = 0;
     }
-    if (set_alarm_min)
+    else if (set_alarm_min)
     {
         if (enc_count == 1) alarm_min++;
         if (enc_count == -1) alarm_min--;
         if (alarm_min >= 60) alarm_min = 0;
         if (alarm_min <= 0) alarm_min = 0;
     }
-    Thread::wait(500);
+    //Thread::wait(500);
 }
 
 /// RPG pushbutton callback ///
 void PB_callback(void)
 {
-    ledPB= !ledPB;
-    set_curr_hour= !set_curr_hour;
-    // if (alarm)
-    // {
-    //     alarm = false;
-    //     speaker = 0;
-    // }
-    // else
-    // {
-    //     if (!set_curr_hour && !set_curr_min && !set_alarm_hour && !set_alarm_min)
-    //     {
-    //         set_curr_hour = true;
-    //     }
-    //     if (set_curr_hour)
-    //     {
-    //         set_curr_hour = false;
-    //         set_curr_min = true;
-    //     }
-    //     if (set_curr_min)
-    //     {
-    //         set_curr_min = false;
-    //         set_alarm_hour = true;
-    //     }
-    //     if (set_alarm_hour)
-    //     {
-    //         set_alarm_hour = false;
-    //         set_alarm_min = true;
-    //     }
-    //     if (set_alarm_min)
-    //     {
-    //         set_alarm_min = false;
-    //     }
-    // }
+    
+    if(alarm)
+    {
+        alarm = false;
+        speaker = 0;
+    }
+    else
+    {
+        if (!set_curr_hour && !set_curr_min && !set_alarm_hour && !set_alarm_min)
+        {
+            set_curr_hour = true;
+            ledPB= !ledPB;
+        }
+        else if (set_curr_hour)
+        {
+            set_curr_hour = false;
+            set_curr_min = true;
+            ledPB= !ledPB;
+        }
+        else if (set_curr_min)
+        {
+            set_curr_min = false;
+            set_alarm_hour = true;
+            ledPB= !ledPB;
+        }
+        else if (set_alarm_hour)
+        {
+            set_alarm_hour = false;
+            set_alarm_min = true;
+            ledPB= !ledPB;
+        }
+        else if (set_alarm_min)
+        {
+            set_alarm_min = false;
+            ledPB= !ledPB;
+        }
+    }
 }
 
 /// MOVEMENT THREAD ///
@@ -187,8 +254,10 @@ void updateTime()
         {
             curr_hour = 0;
         }
+        if (curr_hour == alarm_hour && curr_min == alarm_min && !set_curr_hour 
+                        && !set_curr_min && !set_alarm_hour && !set_alarm_min) alarm = true;
         // wait for 60 seconds
-        Thread::wait(1000);
+        Thread::wait(60 * 1000);
     }
 }
 
@@ -216,31 +285,39 @@ void speaker_interrupt()
 /// MAIN FUNCTION ///
 int main() {
     //uLCD.printf("curr hour %2d", curr_hour);
-    //debounce RPG center pushbutton
-    // RPG_PB.mode(PullDown);
-    // RPG_PB.attach_deasserted(&PB_callback);
-    // RPG_PB.setSampleFrequency();
-    // // generate an interrupt on any change in either encoder bit (A or B)
-    // RPG_A.mode(PullUp);
-    // RPG_B.mode(PullUp);
-    // RPG_A.rise(&Enc_change_ISR);
-    // RPG_A.fall(&Enc_change_ISR);
-    // RPG_B.rise(&Enc_change_ISR);
-    // RPG_B.fall(&Enc_change_ISR);
+    //debounce RPG center pushbutton and other pushbuttons
+    RPG_PB.mode(PullDown);
+    RPG_PB.attach_deasserted(&PB_callback);
+    RPG_PB.setSampleFrequency();
+    up.mode(PullUp);
+    up.attach_deasserted(&precisionUp);
+    up.setSampleFrequency();
+    down.mode(PullUp);
+    down.attach_deasserted(&precisionDown);
+    down.setSampleFrequency();
+    // generate an interrupt on any change in either encoder bit (A or B)
+    RPG_A.mode(PullUp);
+    RPG_B.mode(PullUp);
+    RPG_A.rise(&Enc_change_ISR);
+    RPG_A.fall(&Enc_change_ISR);
+    RPG_B.rise(&Enc_change_ISR);
+    RPG_B.fall(&Enc_change_ISR);
     // set up speaker
     // precompute 128 sample points on one sine wave cycle 
     // used for continuous sine wave output later
-    // for(int k=0; k<128; k++) {
-    //     Analog_out_data[k]=((1.0 + sin((float(k)/128.0*6.28318530717959)))/2.0);
-    //     // scale the sine wave from 0.0 to 1.0 - as needed for AnalogOut arg 
-    // }
+    for(int k=0; k<128; k++) {
+        Analog_out_data[k]=((1.0 + sin((float(k)/128.0*6.28318530717959)))/2.0);
+        // scale the sine wave from 0.0 to 1.0 - as needed for AnalogOut arg 
+    }
     // turn on timer interrupts to start sine wave output
     // sample rate is 500Hz with 128 samples per cycle on sine wave
     //Sample_Period.attach(&speaker_interrupt, 1.0/(1000.0*128));
-    // init sonar
-    mu.startUpdates();
     // clear uLCD
     uLCD.cls();
+    // init sonar
+    mu.startUpdates();
+    
+    
 
     // Start threads
     //Thread speaker(speaker_interrupt);
@@ -249,48 +326,26 @@ int main() {
 
     /// MAIN THREAD ///
     while(1) {
-        // print times to lcd scree
-        dirt = rpg.dir();
-        count += dirt;
-        if (rpg.dir())
-        {
-            count = 0;
-        }
-
         uLCD_lock.lock();
-        // uLCD.locate(0, 0);
-        // if (set_curr_hour) uLCD.printf("MODE: set current hour");
-        // else if (set_curr_min) uLCD.printf("MODE: set current minute");
-        // else if (set_alarm_hour) uLCD.printf("MODE: set alarm hour");
-        // else if (set_alarm_min) uLCD.printf("MODE: set alarm minute");
-        // else uLCD.printf("MODE: normal");
-        // uLCD.locate(1, 1);
-        // uLCD.printf("curr hour %2d", curr_hour);
-        // uLCD.locate(1, 2);
-        // uLCD.printf("curr min %2d", curr_min);
-        // uLCD.locate(1, 3);
-        // uLCD.printf("alarm hour %2d", alarm_hour);
-        // uLCD.locate(1, 4);
-        // uLCD.printf("alarm min %2d", alarm_min);
-        // uLCD.locate(1, 6);
-        // uLCD.printf("alarm %d", alarm);
-        // uLCD.locate(1, 7);
-        // uLCD.printf("curr hour %d", set_curr_hour);
-        // uLCD.locate(1, 8);
-        // uLCD.printf("curr min %d", set_curr_min);
-        // uLCD.locate(1, 9);
-        // uLCD.printf("alarm hour %d", set_alarm_hour);
-        // uLCD.locate(1, 10);
-        // uLCD.printf("alarm min %d", set_alarm_min);
-        uLCD.locate(1, 11);
-        uLCD.printf("dirt %i", dirt);
-        uLCD.locate(1, 12);
-        uLCD.printf("count %i", count);
-        uLCD_lock.unlock();
 
-        // check if times are equal
-        if (curr_hour == alarm_hour && curr_min == alarm_min) alarm = true;
-        else alarm = false;
+        uLCD.locate(1, 1);
+        uLCD.text_width(2);
+        uLCD.text_height(2);
+        uLCD.printf("%02d : %02d", curr_hour, curr_min);
+
+        uLCD.locate(2, 3);
+        uLCD.text_width(1);
+        uLCD.text_height(1);
+        uLCD.printf("%02d : %02d", alarm_hour, alarm_min);
+
+        uLCD.locate(2, 8);
+        if (set_curr_hour) uLCD.printf("MODE: 1");
+        else if (set_curr_min) uLCD.printf("MODE: 2");
+        else if (set_alarm_hour) uLCD.printf("MODE: 3");
+        else if (set_alarm_min) uLCD.printf("MODE: 4");
+        else uLCD.printf("MODE: 0");
+
+        uLCD_lock.unlock();
 
         Thread::wait(50);
     }
