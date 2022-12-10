@@ -7,11 +7,7 @@
 
 #include <stdio.h>
 
-Serial pc(USBTX, USBRX);
-
-/// function definitions ///
 void dist(int distance);
-
 
 /// Pin Assignments ///
 // left motor
@@ -45,8 +41,6 @@ volatile int old_enc = 0;
 volatile int new_enc = 0;
 volatile int enc_count = 0;
 const int lookup_table[] = {0,-1,1,0,1,0,0,-1,-1,0,0,1,0,1,-1,0};
-// volatile int count = 0;
-// volatile int dirt = 0;
 // time variables
 volatile int curr_hour = 12;
 volatile int curr_min = 0;
@@ -57,6 +51,7 @@ volatile bool set_curr_min = false;
 volatile bool set_alarm_hour = false;
 volatile bool set_alarm_min = false;
 volatile bool alarm = false;
+volatile bool turn = false;
 // uLCD variables
 Mutex uLCD_lock;
 // speaker variables
@@ -64,14 +59,16 @@ float Analog_out_data[128];
 volatile int i=0;
 
 
-/// helper function for sonar ///
- void dist(int distance)
+void dist(int distance)
 {
-    //put code here to execute when the distance has changed
-    uLCD_lock.lock();
-    uLCD.locate(0, 5);
-    uLCD.printf("Distance %d mm\r\n", distance);
-    uLCD_lock.unlock();
+    if (distance < 300)
+    {
+        turn = true;
+    }
+    else
+    {
+        turn = false;
+    }
 }
 
 /// pushbutton callback ///
@@ -171,7 +168,6 @@ void Enc_change_ISR(void)
         if (alarm_min >= 60) alarm_min = 0;
         if (alarm_min <= 0) alarm_min = 0;
     }
-    //Thread::wait(500);
 }
 
 /// RPG pushbutton callback ///
@@ -223,15 +219,19 @@ void movement()
     {
         if (alarm)
         {
-            
-            mu.checkDistance();     //call checkDistance() as much as possible, as this is where
-                                    //the class checks if dist needs to be called.
-            left.speed(0.5);
-            right.speed(0.5);
+            mu.checkDistance();
+
+            if(turn) left.stop(1);
+            else left.speed(0.4);
+            right.speed(-0.5);
+
+            left.coast();
+            right.coast();
+            Thread::wait(100);
+
         }
         else
         {
-            mu.checkDistance();
             left.speed(0);
             right.speed(0);
         }
@@ -278,13 +278,25 @@ void speaker_interrupt()
             // this should also be set in the PB callback but this is just in case I suppose.
             speaker = 0;
         }
-        Thread::wait(1000);
     }
+}
+void speakerThread()
+{
+    if (alarm)
+    {
+        // turn on timer interrupts to start sine wave output
+        // sample rate is 500Hz with 128 samples per cycle on sine wave
+        Sample_Period.attach(&speaker_interrupt, 1.0/(1000.0*128));
+    }
+    else
+    {
+        Sample_Period.detach();
+    }
+    Thread::wait(1000);
 }
 
 /// MAIN FUNCTION ///
 int main() {
-    //uLCD.printf("curr hour %2d", curr_hour);
     //debounce RPG center pushbutton and other pushbuttons
     RPG_PB.mode(PullDown);
     RPG_PB.attach_deasserted(&PB_callback);
@@ -309,18 +321,14 @@ int main() {
         Analog_out_data[k]=((1.0 + sin((float(k)/128.0*6.28318530717959)))/2.0);
         // scale the sine wave from 0.0 to 1.0 - as needed for AnalogOut arg 
     }
-    // turn on timer interrupts to start sine wave output
-    // sample rate is 500Hz with 128 samples per cycle on sine wave
-    //Sample_Period.attach(&speaker_interrupt, 1.0/(1000.0*128));
+
     // clear uLCD
     uLCD.cls();
     // init sonar
     mu.startUpdates();
     
-    
-
     // Start threads
-    //Thread speaker(speaker_interrupt);
+    Thread speaker(speaker_interrupt);
     Thread time(updateTime);
     Thread move(movement);
 
