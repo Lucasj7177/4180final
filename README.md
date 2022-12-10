@@ -1,3 +1,4 @@
 # 4180final
 
-Test
+## Wiring Schematic
+![Schematic PNG](Schematic.png)
