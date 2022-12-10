@@ -16,8 +16,17 @@ Alarm that will drive around your room and force you to get up and turn it off.
 8. AA Batteries with battery packs
 9. Two mini DC motors
 10. Two pushbuttons
+
+### Setup
+Follow the wiring schematic given to correctly hook up all the parts. Keep in mind that the motors require their own battery pack due to current limitations.
+Without sufficient current or voltage the Mbed will fail to start up or continue to power cycle. The speaker quality is pretty poor, it would do much better with a PWM pin but they were all used up by the motors.
+
+
 ## Wiring Schematic
 ![Schematic PNG](Schematic.png)
+
+## Video Demo
+[Link to Youtube Video Demo](https://www.youtube.com/watch?v=_B4wL1TXFJc)
 
 ## Software 
 
