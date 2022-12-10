@@ -7,6 +7,7 @@ Alarm that will drive around your room and force you to get up and turn it off.
 
 ![Robot Image](Robot.jpg)
 
+
 ## Wiring and Hardware Setup
 ### Parts:
 1. Mbed microcontroller LPC1768
@@ -31,6 +32,8 @@ Simply set your current time and desired alarm time. The robot will activate whe
 
 ## Video Demo
 [Link to Youtube Video Demo](https://www.youtube.com/watch?v=_B4wL1TXFJc)
+
+![LCD Image](LCD.jpg)
 
 ## Software 
 
