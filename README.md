@@ -1,5 +1,8 @@
 # Alarm Robot
 
+### Joseph Lucas
+### Bronson Zell
+
 ## Wiring and Hardware Setup
 ### Parts:
 1. Mbed microcontroller LPC1768
