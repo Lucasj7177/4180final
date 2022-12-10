@@ -4,6 +4,9 @@ Alarm that will drive around your room and force you to get up and turn it off.
 ### Joseph Lucas
 ### Bronson Zell
 
+
+![Robot Image](Robot.jpg)
+
 ## Wiring and Hardware Setup
 ### Parts:
 1. Mbed microcontroller LPC1768
