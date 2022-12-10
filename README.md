@@ -20,6 +20,7 @@ Alarm that will drive around your room and force you to get up and turn it off.
 ### Setup
 Follow the wiring schematic given to correctly hook up all the parts. Keep in mind that the motors require their own battery pack due to current limitations.
 Without sufficient current or voltage the Mbed will fail to start up or continue to power cycle. The speaker quality is pretty poor, it would do much better with a PWM pin but they were all used up by the motors.
+Simply set your current time and desired alarm time. The robot will activate when those are equal. Time is in 24h format.
 
 
 ## Wiring Schematic
